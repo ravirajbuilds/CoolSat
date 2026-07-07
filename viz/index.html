@@ -1,0 +1,457 @@
+<title>CoolSat — US Night-time Heat, 2016–2025</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --ground: #f4f6f5;
+    --panel: #ffffff;
+    --panel-2: #eef1f0;
+    --ink: #141a1e;
+    --ink-2: #47535b;
+    --muted: #6b7780;
+    --line: #d7dcda;
+    --accent: #e8663a;
+    --accent-ink: #b23f18;
+    --shadow: 0 1px 2px rgba(20,26,30,.06), 0 8px 24px rgba(20,26,30,.06);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0f1418; --panel: #161c21; --panel-2: #1b232a;
+      --ink: #e7ecef; --ink-2: #a7b3bb; --muted: #6b7780; --line: #263038;
+      --accent: #f07a4f; --accent-ink: #f5936d;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0f1418; --panel: #161c21; --panel-2: #1b232a;
+    --ink: #e7ecef; --ink-2: #a7b3bb; --muted: #6b7780; --line: #263038;
+    --accent: #f07a4f; --accent-ink: #f5936d;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"] {
+    --ground: #f4f6f5; --panel: #ffffff; --panel-2: #eef1f0;
+    --ink: #141a1e; --ink-2: #47535b; --muted: #6b7780; --line: #d7dcda;
+    --accent: #e8663a; --accent-ink: #b23f18;
+    --shadow: 0 1px 2px rgba(20,26,30,.06), 0 8px 24px rgba(20,26,30,.06);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 56px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: flex-end;
+           justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .22em;
+             text-transform: uppercase; color: var(--accent-ink); margin: 0 0 6px; }
+  h1 { font-size: clamp(22px, 3.2vw, 33px); line-height: 1.08; margin: 0;
+       font-weight: 680; letter-spacing: -.015em; text-wrap: balance; }
+  .sub { color: var(--ink-2); margin: 8px 0 0; max-width: 62ch; font-size: 14.5px; }
+  .badge { font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+           border: 1px solid var(--line); border-radius: 999px;
+           padding: 5px 11px; color: var(--ink-2); white-space: nowrap;
+           background: var(--panel); }
+  .badge.demo { color: var(--accent-ink); border-color: var(--accent); }
+
+  .card { background: var(--panel); border: 1px solid var(--line);
+          border-radius: 14px; box-shadow: var(--shadow); }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr);
+           gap: 12px; margin-bottom: 16px; }
+  .tile { padding: 13px 15px; }
+  .tile .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em;
+             text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .tile .v { font-family: var(--mono); font-size: 23px; font-weight: 600;
+             font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .tile .u { font-size: 13px; color: var(--ink-2); font-weight: 500; }
+  .tile .cap { font-size: 12px; color: var(--muted); margin-top: 3px;
+               font-family: var(--mono); }
+
+  .stage { padding: 14px 14px 6px; }
+  .canvas-holder { position: relative; width: 100%; }
+  canvas { width: 100%; height: auto; display: block; border-radius: 8px; }
+  #tip { position: absolute; pointer-events: none; z-index: 5; opacity: 0;
+         transform: translate(-50%, -118%); transition: opacity .08s;
+         background: var(--ink); color: var(--ground);
+         font-family: var(--mono); font-size: 11.5px; line-height: 1.35;
+         padding: 7px 9px; border-radius: 7px; white-space: nowrap;
+         box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+  #tip b { color: var(--accent); }
+
+  /* legend */
+  .legend { display: flex; align-items: center; gap: 12px; padding: 6px 4px 12px;
+            flex-wrap: wrap; }
+  .legend .lbl { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+                 text-transform: uppercase; color: var(--muted); }
+  .ramp { flex: 1; min-width: 200px; height: 12px; border-radius: 6px;
+          border: 1px solid var(--line); }
+  .ticks { display: flex; justify-content: space-between; font-family: var(--mono);
+           font-size: 10.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  /* controls */
+  .controls { padding: 16px; margin-top: 16px; }
+  .transport { display: flex; align-items: center; gap: 16px; }
+  button.play { display: inline-flex; align-items: center; justify-content: center;
+                gap: 8px; width: 116px; height: 40px; border-radius: 10px;
+                border: 1px solid var(--accent); background: var(--accent);
+                color: #fff; font-family: var(--mono); font-size: 12.5px;
+                letter-spacing: .06em; cursor: pointer; font-weight: 600; }
+  button.play:hover { filter: brightness(1.06); }
+  button.play:focus-visible, .slider:focus-visible { outline: 2px solid var(--accent);
+                outline-offset: 3px; }
+  .now { flex: 1; }
+  .now .m { font-family: var(--mono); font-size: 26px; font-weight: 640;
+            letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .now .cap { font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+              text-transform: uppercase; color: var(--muted); }
+  .spd { font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+         display: flex; align-items: center; gap: 6px; }
+  .spd select { font-family: var(--mono); font-size: 12px; padding: 5px 7px;
+                border-radius: 7px; border: 1px solid var(--line);
+                background: var(--panel-2); color: var(--ink); }
+
+  .slider-row { margin-top: 14px; }
+  .slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+            border-radius: 6px; background: var(--panel-2); outline: none;
+            border: 1px solid var(--line); }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px;
+            border-radius: 50%; background: var(--accent); border: 3px solid var(--panel);
+            box-shadow: 0 1px 4px rgba(0,0,0,.3); cursor: pointer; margin-top: -1px; }
+  .slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%;
+            background: var(--accent); border: 3px solid var(--panel); cursor: pointer; }
+  .years { display: flex; justify-content: space-between; margin-top: 7px;
+           font-family: var(--mono); font-size: 10px; color: var(--muted);
+           font-variant-numeric: tabular-nums; }
+
+  .foot { margin-top: 22px; color: var(--muted); font-size: 12.5px;
+          line-height: 1.6; max-width: 78ch; }
+  .foot code { font-family: var(--mono); background: var(--panel-2);
+               padding: 1px 5px; border-radius: 4px; font-size: 11.5px; color: var(--ink-2); }
+  a { color: var(--accent-ink); }
+
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .transport { flex-wrap: wrap; gap: 10px; }
+    .now .m { font-size: 22px; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">CoolSat · Urban Heat Observatory</p>
+      <h1>Average night-time temperature across the US</h1>
+      <p class="sub">Monthly mean of the daily-minimum 2&nbsp;m air temperature — the
+        standard proxy for night-time heat and urban-heat-island stress — over the
+        last ten years. Drag the timeline or press play to sweep 2016 → 2025.</p>
+    </div>
+    <div id="prov" class="badge">loading…</div>
+  </header>
+
+  <section class="tiles" id="tiles">
+    <div class="tile card"><p class="k">National mean night</p>
+      <div class="v"><span id="t-mean">–</span><span class="u"> °C</span></div>
+      <div class="cap" id="t-mean-cap">&nbsp;</div></div>
+    <div class="tile card"><p class="k">Hottest cell</p>
+      <div class="v"><span id="t-hot">–</span><span class="u"> °C</span></div>
+      <div class="cap" id="t-hot-cap">&nbsp;</div></div>
+    <div class="tile card"><p class="k">Coolest cell</p>
+      <div class="v"><span id="t-cold">–</span><span class="u"> °C</span></div>
+      <div class="cap" id="t-cold-cap">&nbsp;</div></div>
+    <div class="tile card"><p class="k">Δ vs 2016 (same month)</p>
+      <div class="v"><span id="t-anom">–</span><span class="u"> °C</span></div>
+      <div class="cap" id="t-anom-cap">decadal shift</div></div>
+  </section>
+
+  <div class="card stage">
+    <div class="canvas-holder">
+      <canvas id="map"></canvas>
+      <div id="tip"></div>
+    </div>
+    <div class="legend">
+      <span class="lbl">cooler</span>
+      <div style="flex:1;min-width:200px">
+        <div class="ramp" id="ramp"></div>
+        <div class="ticks" id="ticks"></div>
+      </div>
+      <span class="lbl">hotter</span>
+    </div>
+  </div>
+
+  <div class="card controls">
+    <div class="transport">
+      <button class="play" id="play" aria-label="Play timeline">▶ Play</button>
+      <div class="now">
+        <div class="m" id="now-month">—</div>
+        <div class="cap">selected month</div>
+      </div>
+      <label class="spd">speed
+        <select id="speed">
+          <option value="220">1×</option>
+          <option value="120" selected>2×</option>
+          <option value="60">4×</option>
+        </select>
+      </label>
+    </div>
+    <div class="slider-row">
+      <input class="slider" id="slider" type="range" min="0" max="119" value="6"
+             step="1" aria-label="Month timeline" />
+      <div class="years" id="years"></div>
+    </div>
+  </div>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+window.__HEAT_SRC__ = "./data/us_nighttime_monthly.json";
+
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const data = window.__HEAT__ || await (await fetch(window.__HEAT_SRC__)).json();
+
+  const SCALE = data.meta.value_scale || 0.1;
+  const months = data.months;
+  const cells = data.grid;
+  const step = data.meta.grid_step_deg || 0.8;
+
+  // ---- projection bounds (pseudo-equirectangular, lon compressed by cos(lat)) ----
+  let lonMin = Infinity, lonMax = -Infinity, latMin = Infinity, latMax = -Infinity;
+  for (const c of cells) {
+    if (c.lon < lonMin) lonMin = c.lon; if (c.lon > lonMax) lonMax = c.lon;
+    if (c.lat < latMin) latMin = c.lat; if (c.lat > latMax) latMax = c.lat;
+  }
+  lonMin -= step / 2; lonMax += step / 2; latMin -= step / 2; latMax += step / 2;
+  const latMid = (latMin + latMax) / 2;
+  const kx = Math.cos(latMid * Math.PI / 180);
+  const projW = (lonMax - lonMin) * kx;
+  const projH = (latMax - latMin);
+  const PAD = 8;
+
+  // ---- diverging blue↔red heat ramp (data ink; midpoint = mild night ~12°C) ----
+  const STOPS = [
+    [-20, [8, 48, 107]], [-8, [37, 106, 191]], [2, [109, 167, 236]],
+    [12, [232, 233, 232]], [20, [242, 165, 130]], [26, [227, 73, 72]],
+    [36, [127, 29, 29]],
+  ];
+  const DOMAIN_MIN = -20, DOMAIN_MAX = 36;
+  function heatColor(t) {
+    if (t <= STOPS[0][0]) return STOPS[0][1];
+    if (t >= STOPS[STOPS.length - 1][0]) return STOPS[STOPS.length - 1][1];
+    for (let i = 1; i < STOPS.length; i++) {
+      if (t <= STOPS[i][0]) {
+        const [a, ca] = STOPS[i - 1], [b, cb] = STOPS[i];
+        const f = (t - a) / (b - a);
+        return [0, 1, 2].map((j) => Math.round(ca[j] + (cb[j] - ca[j]) * f));
+      }
+    }
+    return STOPS[STOPS.length - 1][1];
+  }
+  const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+  // legend ramp + ticks
+  const rampStops = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = DOMAIN_MIN + (DOMAIN_MAX - DOMAIN_MIN) * i / 10;
+    rampStops.push(`${rgb(heatColor(t))} ${i * 10}%`);
+  }
+  $("ramp").style.background = `linear-gradient(90deg, ${rampStops.join(",")})`;
+  $("ticks").innerHTML = [-20, -10, 0, 10, 20, 30].map((v) =>
+    `<span>${v > 0 ? "+" + v : v}°</span>`).join("");
+
+  // year ticks under the slider
+  const yrs = [];
+  for (let i = 0; i < months.length; i += 12) yrs.push(months[i].slice(0, 4));
+  $("years").innerHTML = yrs.map((y) => `<span>${y.slice(2)}</span>`).join("");
+
+  // provenance
+  const prov = $("prov");
+  if (data.meta.is_demo) {
+    prov.textContent = "◆ DEMO climatology — not observations";
+    prov.classList.add("demo");
+  } else {
+    prov.textContent = "● " + (data.meta.source || "Open-Meteo");
+  }
+
+  // ---- canvas ----
+  const canvas = $("map"), ctx = canvas.getContext("2d");
+  const holder = canvas.parentElement;
+  let W = 0, H = 0, sx = 1, sy = 1, ox = 0, oy = 0, cw = 0, ch = 0;
+
+  function px(lon, lat) {
+    return [ox + ((lon - lonMin) * kx) * sx, oy + ((latMax - lat)) * sy];
+  }
+  function invert(x, y) {
+    return { lon: (x - ox) / sx / kx + lonMin, lat: latMax - (y - oy) / sy };
+  }
+
+  function layout() {
+    const cssW = holder.clientWidth;
+    const aspect = (projW + PAD * 2 / 1) / (projH); // keep US proportions
+    const cssH = Math.round(cssW * (projH) / (projW));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cssW; H = cssH;
+    canvas.style.height = cssH + "px";
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sx = (W - PAD * 2) / projW; sy = (H - PAD * 2) / projH;
+    ox = PAD; oy = PAD;
+    cw = step * kx * sx + 0.7; ch = step * sy + 0.7; // slight overlap, no gaps
+  }
+
+  let current = +$("slider").value;
+
+  function surface() {
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue("--panel-2").trim() || "#eef1f0";
+  }
+
+  function draw() {
+    const t = current;
+    ctx.clearRect(0, 0, W, H);
+    // cells
+    for (const c of cells) {
+      const raw = c.v[t];
+      if (raw == null) continue;
+      const temp = raw * SCALE;
+      const [x, y] = px(c.lon, c.lat);
+      ctx.fillStyle = rgb(heatColor(temp));
+      ctx.fillRect(x - cw / 2, y - ch / 2, cw, ch);
+    }
+    // CONUS outline
+    if (data.polygon && data.polygon.length) {
+      ctx.beginPath();
+      data.polygon.forEach(([lo, la], i) => {
+        const [x, y] = px(lo, la);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.closePath();
+      ctx.lineWidth = 1.1;
+      ctx.strokeStyle = "rgba(120,132,140,.55)";
+      ctx.stroke();
+    }
+    // cities
+    ctx.font = "600 10px " + "ui-monospace, monospace";
+    for (const city of data.cities) {
+      const [x, y] = px(city.lon, city.lat);
+      ctx.beginPath(); ctx.arc(x, y, 2.3, 0, 7);
+      ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.stroke();
+    }
+    updateStats(t);
+    $("now-month").textContent = fmtMonth(months[t]);
+  }
+
+  // ---- stats ----
+  const MNAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function fmtMonth(mm) {
+    return MNAMES[+mm.slice(5) - 1] + " " + mm.slice(0, 4);
+  }
+  // precompute nearest city name for hot/cold captions
+  function nearestCity(lat, lon) {
+    let best = null, bd = 1e9;
+    for (const c of data.cities) {
+      const d = (c.lat - lat) ** 2 + ((c.lon - lon) * kx) ** 2;
+      if (d < bd) { bd = d; best = c; }
+    }
+    return { name: best.name, deg: Math.sqrt(bd) };
+  }
+  function label(lat, lon) {
+    const n = nearestCity(lat, lon);
+    return n.deg < 1.6 ? n.name : `${Math.abs(lat).toFixed(1)}°N ${Math.abs(lon).toFixed(1)}°W`;
+  }
+
+  function updateStats(t) {
+    let sum = 0, n = 0, hot = -1e9, cold = 1e9, hotC = null, coldC = null;
+    for (const c of cells) {
+      const raw = c.v[t]; if (raw == null) continue;
+      const v = raw * SCALE; sum += v; n++;
+      if (v > hot) { hot = v; hotC = c; }
+      if (v < cold) { cold = v; coldC = c; }
+    }
+    const mean = sum / n;
+    $("t-mean").textContent = mean.toFixed(1);
+    $("t-mean-cap").textContent = fmtMonth(months[t]);
+    $("t-hot").textContent = hot.toFixed(1);
+    $("t-hot-cap").textContent = label(hotC.lat, hotC.lon);
+    $("t-cold").textContent = cold.toFixed(1);
+    $("t-cold-cap").textContent = label(coldC.lat, coldC.lon);
+
+    // decadal anomaly: national mean this calendar month vs first year same month
+    const monthOfYear = t % 12;
+    let s0 = 0, n0 = 0;
+    for (const c of cells) {
+      const raw = c.v[monthOfYear]; if (raw == null) continue;
+      s0 += raw * SCALE; n0++;
+    }
+    const base = s0 / n0;
+    const d = mean - base;
+    const anomEl = $("t-anom");
+    anomEl.textContent = (d >= 0 ? "+" : "") + d.toFixed(2);
+    $("t-anom-cap").textContent = "vs " + months[monthOfYear].slice(0, 4) + " same month";
+  }
+
+  // ---- tooltip ----
+  const tip = $("tip");
+  canvas.addEventListener("pointermove", (e) => {
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const { lon, lat } = invert(x, y);
+    // snap to grid cell center
+    let best = null, bd = step * step;
+    for (const c of cells) {
+      const d = (c.lat - lat) ** 2 + (c.lon - lon) ** 2;
+      if (d < bd) { bd = d; best = c; }
+    }
+    if (!best) { tip.style.opacity = 0; return; }
+    const v = best.v[current];
+    if (v == null) { tip.style.opacity = 0; return; }
+    const [cx, cy] = px(best.lon, best.lat);
+    tip.style.left = cx + "px"; tip.style.top = cy + "px";
+    tip.innerHTML = `<b>${(v * SCALE).toFixed(1)} °C</b> night<br>${label(best.lat, best.lon)}`;
+    tip.style.opacity = 1;
+  });
+  canvas.addEventListener("pointerleave", () => { tip.style.opacity = 0; });
+
+  // ---- transport ----
+  const slider = $("slider"), playBtn = $("play"), speedSel = $("speed");
+  let timer = null;
+  function setMonth(t) { current = t; slider.value = t; draw(); }
+  slider.addEventListener("input", () => setMonth(+slider.value));
+  function stop() { if (timer) clearInterval(timer); timer = null;
+                    playBtn.textContent = "▶ Play"; }
+  function start() {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    playBtn.textContent = "❚❚ Pause";
+    const tick = () => {
+      let t = current + 1; if (t > 119) t = 0; setMonth(t);
+      if (t === 119 && reduce) stop();
+    };
+    timer = setInterval(tick, +speedSel.value);
+  }
+  playBtn.addEventListener("click", () => { timer ? stop() : start(); });
+  speedSel.addEventListener("change", () => { if (timer) { stop(); start(); } });
+
+  // theme + resize redraws
+  let rt;
+  const onResize = () => { clearTimeout(rt); rt = setTimeout(() => { layout(); draw(); }, 80); };
+  window.addEventListener("resize", onResize);
+  new MutationObserver(() => draw()).observe(document.documentElement,
+    { attributes: true, attributeFilter: ["data-theme"] });
+
+  // footer / provenance detail
+  const src = data.meta.is_demo
+    ? `Showing a <b>synthetic demo climatology</b> (deterministic model: latitude, elevation & continentality proxies, seasonal cycle, decadal warming, urban-heat offsets). Regenerate real data with <code>python data/fetch_openmeteo.py</code>.`
+    : `Data: ${data.meta.source}. ${cells.length} grid cells · ${months.length} months.`;
+  $("foot").innerHTML = `${src} Night-time temperature = monthly mean of daily-minimum
+    2&nbsp;m air temperature. Diverging scale centred on a mild (~12&nbsp;°C) night.`;
+
+  layout(); setMonth(6); // start on July 2016 (peak summer)
+})();
+</script>

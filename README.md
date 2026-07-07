@@ -1,0 +1,82 @@
+# CoolSat — Urban Heat Mitigation via AI/ML
+
+Geospatial, physics-informed decision support for identifying urban heat-stress
+hotspots, quantifying the drivers of urban heating, and generating optimized,
+scenario-based cooling interventions.
+
+This repository is being built up incrementally toward that full framework
+(heat-stress mapping → driver attribution → physics-informed ML → cooling-scenario
+optimization). **This first milestone** delivers the baseline heat-observation
+layer: an interactive map of **average monthly night-time temperature across the
+Continental US over the last 10 years (2016–2025)**, driven by a timeline slider.
+
+Night-time temperature is the metric that matters most for urban heat stress — the
+urban-heat-island signal is strongest overnight, when built surfaces re-radiate the
+day's stored heat and cities fail to cool down.
+
+## The visualization
+
+`viz/index.html` — a self-contained, theme-aware viewer:
+
+- Diverging blue↔red heat map of the CONUS, one colored cell per grid point.
+- A **timeline slider + play button** sweeping all 120 months (2016-01 → 2025-12).
+- Live stat tiles: national mean night-time temperature, hottest/coolest cell, and
+  the decadal anomaly vs the same month in the base year (surfaces the warming trend).
+- Hover any cell for its temperature and location.
+
+Open it directly (`viz/index.html`) once a data file exists at
+`viz/data/us_nighttime_monthly.json`.
+
+## Data
+
+**Metric.** "Night-time temperature" is the monthly mean of the **daily-minimum
+2 m air temperature** (`temperature_2m_min`) — the diurnal minimum occurs shortly
+before dawn, so it is the standard proxy for night-time / urban-heat-island studies.
+
+**Source.** [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api)
+(ERA5 reanalysis) — free, no API key. A regular lat/lon grid is sampled across the
+CONUS and clipped to a simplified US boundary polygon.
+
+### Generate the data
+
+```bash
+# Real Open-Meteo data (run where archive-api.open-meteo.com is reachable):
+pip install requests
+python data/fetch_openmeteo.py                # coarse grid, ~10 yrs
+python data/fetch_openmeteo.py --step 0.8     # finer grid (slower, rate-limited)
+
+# Offline demo climatology (no network — used to develop/preview the viz):
+python data/gen_demo_data.py
+```
+
+Both scripts write the **same JSON schema** to `viz/data/us_nighttime_monthly.json`,
+so the viewer works identically with either. The committed data file is the
+**demo climatology** (a deterministic model of latitude, elevation/continentality,
+seasonal cycle, decadal warming, and urban-heat offsets) — it is realistic in shape
+but is *not* observations. The viewer shows a clear `DEMO` badge until you swap in
+real data. Re-run `fetch_openmeteo.py` to replace it.
+
+> ℹ️ The Open-Meteo API host is blocked from the CI/build container's network, so
+> the committed dataset is the demo. Run `fetch_openmeteo.py` locally to pull the
+> real ERA5 night-time series.
+
+## Layout
+
+```
+data/
+  us_region.py         # CONUS boundary polygon, sampling grid, city list (shared)
+  fetch_openmeteo.py   # pull real night-time temps from Open-Meteo (ERA5)
+  gen_demo_data.py     # offline synthetic climatology (same schema)
+viz/
+  index.html           # interactive slider map (self-contained)
+  data/
+    us_nighttime_monthly.json   # generated grid data
+```
+
+## Roadmap
+
+- [x] Baseline night-time heat layer + timeline slider (this milestone)
+- [ ] Landsat 8 / ECOSTRESS land-surface-temperature hotspots
+- [ ] Driver attribution (LULC, NDVI/NDBI, urban morphology, ERA5 atmospherics)
+- [ ] Physics-informed ML for LST ↔ driver relationships
+- [ ] Cooling-scenario simulation & optimization (greening, cool roofs, albedo, water)
