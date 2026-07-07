@@ -16,7 +16,7 @@ day's stored heat and cities fail to cool down.
 
 ## The visualization
 
-`viz/index.html` — a self-contained, theme-aware viewer:
+`index.html` (repo root) — a self-contained, theme-aware viewer:
 
 - Diverging blue↔red heat map of the CONUS, one colored cell per grid point.
 - A **timeline slider + play button** sweeping all 120 months (2016-01 → 2025-12).
@@ -24,8 +24,9 @@ day's stored heat and cities fail to cool down.
   the decadal anomaly vs the same month in the base year (surfaces the warming trend).
 - Hover any cell for its temperature and location.
 
-Open it directly (`viz/index.html`) once a data file exists at
-`viz/data/us_nighttime_monthly.json`.
+It is served at the site root, so it deploys as a plain static site on Vercel (or
+any static host) with no build step. Open `index.html` directly once a data file
+exists at `viz/data/us_nighttime_monthly.json`.
 
 ## Data
 
@@ -63,12 +64,13 @@ real data. Re-run `fetch_openmeteo.py` to replace it.
 ## Layout
 
 ```
+index.html             # interactive slider map (self-contained, served at site root)
+vercel.json            # static-hosting config (clean URLs, cache headers)
 data/
   us_region.py         # CONUS boundary polygon, sampling grid, city list (shared)
   fetch_openmeteo.py   # pull real night-time temps from Open-Meteo (ERA5)
   gen_demo_data.py     # offline synthetic climatology (same schema)
 viz/
-  index.html           # interactive slider map (self-contained)
   data/
     us_nighttime_monthly.json   # generated grid data
 ```
