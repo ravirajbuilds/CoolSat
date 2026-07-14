@@ -53,11 +53,13 @@ def land_grid(step):
             if _point_in_polygon(lon, lat, CONUS_POLYGON)]
 
 
-def fetch_batch(batch, start_date, end_date, session, retries=6):
+def fetch_batch(batch, start_date, end_date, session, retries=10):
     """Fetch one batch of (lat, lon) points in a single multi-location request.
 
     Open-Meteo returns a JSON object for a single location and a JSON array for
-    many; normalise to a list aligned with `batch` order.
+    many; normalise to a list aligned with `batch` order. Persistent rate-limiting
+    RAISES rather than returning empty — a dropped batch must fail the run loudly,
+    never silently leave a hole in the map.
     """
     params = {
         "latitude": ",".join(f"{la:.4f}" for la, _ in batch),
@@ -68,20 +70,25 @@ def fetch_batch(batch, start_date, end_date, session, retries=6):
         "timezone": "auto",
         "temperature_unit": "celsius",
     }
+    last = "rate limited"
     for attempt in range(retries):
         try:
             r = session.get(ARCHIVE_URL, params=params, timeout=120)
-            if r.status_code == 429:                      # rate limited
-                time.sleep(min(60, 2 ** attempt * 3))
+            if r.status_code == 429:                      # rate limited: wait & retry
+                last = "HTTP 429"
+                time.sleep(min(60, 2 ** attempt * 4))
                 continue
             r.raise_for_status()
             payload = r.json()
-            return payload if isinstance(payload, list) else [payload]
-        except requests.RequestException:
-            if attempt == retries - 1:
-                raise
-            time.sleep(2 ** attempt)
-    return []
+            results = payload if isinstance(payload, list) else [payload]
+            if len(results) != len(batch):
+                raise RuntimeError(
+                    f"got {len(results)} of {len(batch)} locations")
+            return results
+        except requests.RequestException as e:
+            last = str(e)
+            time.sleep(min(30, 2 ** attempt))
+    raise RuntimeError(f"batch failed after {retries} attempts ({last})")
 
 
 def monthly_means(daily, months):
@@ -109,10 +116,12 @@ def main():
                     help="grid resolution in degrees (default 1.5)")
     ap.add_argument("--years", type=int, default=10)
     ap.add_argument("--end-year", type=int, default=2025)
-    ap.add_argument("--batch", type=int, default=100,
-                    help="locations per API request")
-    ap.add_argument("--sleep", type=float, default=1.0,
-                    help="seconds to pause between batch requests")
+    ap.add_argument("--batch", type=int, default=40,
+                    help="locations per API request (smaller = gentler on the "
+                         "per-minute rate limit)")
+    ap.add_argument("--sleep", type=float, default=12.0,
+                    help="seconds to pause between batch requests (paces total "
+                         "weight under Open-Meteo's free ~600/min limit)")
     args = ap.parse_args()
 
     end_year = args.end_year
@@ -142,8 +151,8 @@ def main():
             time.sleep(args.sleep)
 
     if len(grid) != len(cells):
-        print(f"WARNING: got {len(grid)} cells, expected {len(cells)}",
-              file=sys.stderr)
+        sys.exit(f"ERROR: got {len(grid)} of {len(cells)} cells — refusing to "
+                 f"write an incomplete dataset")
 
     payload = {
         "meta": {
