@@ -112,8 +112,10 @@ def monthly_means(daily, months):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--step", type=float, default=1.5,
-                    help="grid resolution in degrees (default 1.5)")
+    ap.add_argument("--step", type=float, default=2.5,
+                    help="grid resolution in degrees. Open-Meteo's free tier caps "
+                         "~200 cells/10-yr per hour per IP, so <2.0 will exhaust "
+                         "the hourly quota mid-run; 2.5 (~130 cells) completes in one pass")
     ap.add_argument("--years", type=int, default=10)
     ap.add_argument("--end-year", type=int, default=2025)
     ap.add_argument("--batch", type=int, default=40,

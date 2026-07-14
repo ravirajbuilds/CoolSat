@@ -17,8 +17,8 @@ on:
   workflow_dispatch:
     inputs:
       step:
-        description: "Grid resolution in degrees (smaller = finer & slower)"
-        default: "1.5"
+        description: "Grid resolution in degrees (smaller = finer; <2.0 exceeds the free hourly quota in one run)"
+        default: "2.5"
       years:
         description: "Number of years back to fetch"
         default: "10"
@@ -51,7 +51,7 @@ jobs:
       - name: Fetch from Open-Meteo
         run: |
           python data/fetch_openmeteo.py \
-            --step "${{ github.event.inputs.step || '1.5' }}" \
+            --step "${{ github.event.inputs.step || '2.5' }}" \
             --years "${{ github.event.inputs.years || '10' }}" \
             --end-year "${{ github.event.inputs.end_year || '2025' }}"
 

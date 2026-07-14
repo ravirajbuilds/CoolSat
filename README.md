@@ -43,8 +43,8 @@ CONUS and clipped to a simplified US boundary polygon.
 ```bash
 # Real Open-Meteo data (run where archive-api.open-meteo.com is reachable):
 pip install requests
-python data/fetch_openmeteo.py                # coarse grid, ~10 yrs
-python data/fetch_openmeteo.py --step 0.8     # finer grid (slower, rate-limited)
+python data/fetch_openmeteo.py                # 2.5° grid (~130 cells), 10 yrs
+python data/fetch_openmeteo.py --step 2.0     # finer, but see the quota note below
 
 # Offline demo climatology (no network — used to develop/preview the viz):
 python data/gen_demo_data.py
@@ -57,9 +57,15 @@ seasonal cycle, decadal warming, and urban-heat offsets) — it is realistic in 
 but is *not* observations. The viewer shows a clear `DEMO` badge until you swap in
 real data. Re-run `fetch_openmeteo.py` to replace it.
 
-> ℹ️ The Open-Meteo API host is blocked from the CI/build container's network, so
-> the committed dataset is the demo. Run `fetch_openmeteo.py` locally to pull the
-> real ERA5 night-time series.
+> ℹ️ **How the committed data is produced.** The Open-Meteo host is blocked from the
+> build container's network, so the real fetch runs on a **GitHub-hosted runner**
+> (`.github/workflows/fetch-openmeteo.yml`), which commits the static JSON back to
+> the branch. Open-Meteo's free tier caps roughly **200 cells × 10 yr per hour per
+> IP**, so a single run must stay under that — the default **2.5° grid (~130 cells)**
+> completes in one pass. A finer grid needs a paid API key or several runs spread
+> across hours (each pass only overwrites on success, so the map is never left with
+> holes). Trigger a refresh from the repo's **Actions → Fetch Open-Meteo night-time
+> data → Run workflow**, or by pushing a change to the fetch script.
 
 ## Layout
 
