@@ -8,15 +8,21 @@ studies, since the diurnal minimum occurs a little before dawn. For each land
 grid cell we pull the full daily series over the last 10 calendar years and
 average it per calendar month.
 
-The Open-Meteo archive API is free and needs no key, but is rate limited, so we
-sample the grid at a coarser step than the demo by default and sleep between
-calls. Run it where outbound HTTPS to `archive-api.open-meteo.com` is allowed
-(it is blocked inside the CoolSat build container).
+To stay within Open-Meteo's free-tier limits, we request **many locations per
+HTTP call** (comma-separated coordinates) instead of one call per cell — this
+slashes the request count and finishes in a couple of minutes. The API call
+*weight* still scales with locations x years, so keep the grid coarse enough
+that (cells x years) stays comfortably under the ~10k/day free quota; the
+default 1.5 deg grid (~370 cells x 10 yr) is well within it.
+
+Run it where outbound HTTPS to `archive-api.open-meteo.com` is allowed (it is
+blocked inside the CoolSat build container — see the GitHub Actions workflow,
+which runs this on a GitHub-hosted runner).
 
 Usage:
     pip install requests
-    python data/fetch_openmeteo.py                 # default coarse grid
-    python data/fetch_openmeteo.py --step 0.8      # match the demo resolution
+    python data/fetch_openmeteo.py                 # 1.5 deg grid, 10 yr
+    python data/fetch_openmeteo.py --step 1.0      # finer (more quota/time)
     python data/fetch_openmeteo.py --years 5
 """
 import argparse
@@ -43,15 +49,19 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "viz", "data",
 def land_grid(step):
     lons = _frange(LON_MIN, LON_MAX, step)
     lats = _frange(LAT_MIN, LAT_MAX, step)
-    cells = [(lat, lon) for lat in lats for lon in lons
-             if _point_in_polygon(lon, lat, CONUS_POLYGON)]
-    return cells
+    return [(lat, lon) for lat in lats for lon in lons
+            if _point_in_polygon(lon, lat, CONUS_POLYGON)]
 
 
-def fetch_cell(lat, lon, start_date, end_date, session, retries=4):
+def fetch_batch(batch, start_date, end_date, session, retries=6):
+    """Fetch one batch of (lat, lon) points in a single multi-location request.
+
+    Open-Meteo returns a JSON object for a single location and a JSON array for
+    many; normalise to a list aligned with `batch` order.
+    """
     params = {
-        "latitude": lat,
-        "longitude": lon,
+        "latitude": ",".join(f"{la:.4f}" for la, _ in batch),
+        "longitude": ",".join(f"{lo:.4f}" for _, lo in batch),
         "start_date": start_date,
         "end_date": end_date,
         "daily": "temperature_2m_min",
@@ -60,22 +70,25 @@ def fetch_cell(lat, lon, start_date, end_date, session, retries=4):
     }
     for attempt in range(retries):
         try:
-            r = session.get(ARCHIVE_URL, params=params, timeout=60)
-            if r.status_code == 429:
-                time.sleep(2 ** attempt * 5)
+            r = session.get(ARCHIVE_URL, params=params, timeout=120)
+            if r.status_code == 429:                      # rate limited
+                time.sleep(min(60, 2 ** attempt * 3))
                 continue
             r.raise_for_status()
-            d = r.json().get("daily", {})
-            return d.get("time", []), d.get("temperature_2m_min", [])
+            payload = r.json()
+            return payload if isinstance(payload, list) else [payload]
         except requests.RequestException:
             if attempt == retries - 1:
                 raise
             time.sleep(2 ** attempt)
-    return [], []
+    return []
 
 
-def monthly_means(times, values, months):
-    """Average daily values into a per-YYYY-MM series aligned to `months`."""
+def monthly_means(daily, months):
+    """Average a location's daily series into a per-YYYY-MM list aligned to
+    `months`. `daily` is the Open-Meteo per-location {time, temperature_2m_min}."""
+    times = daily.get("time", []) if daily else []
+    values = daily.get("temperature_2m_min", []) if daily else []
     buckets = {mm: [] for mm in months}
     for t, v in zip(times, values):
         if v is None:
@@ -93,34 +106,44 @@ def monthly_means(times, values, months):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--step", type=float, default=1.5,
-                    help="grid resolution in degrees (default 1.5; the demo uses 0.8)")
+                    help="grid resolution in degrees (default 1.5)")
     ap.add_argument("--years", type=int, default=10)
     ap.add_argument("--end-year", type=int, default=2025)
-    ap.add_argument("--sleep", type=float, default=0.4,
-                    help="seconds to pause between API calls")
+    ap.add_argument("--batch", type=int, default=100,
+                    help="locations per API request")
+    ap.add_argument("--sleep", type=float, default=1.0,
+                    help="seconds to pause between batch requests")
     args = ap.parse_args()
 
     end_year = args.end_year
     start_year = end_year - args.years + 1
-    start_date = f"{start_year}-01-01"
-    end_date = f"{end_year}-12-31"
+    start_date, end_date = f"{start_year}-01-01", f"{end_year}-12-31"
     months = month_labels(start_year, end_year)
 
     cells = land_grid(args.step)
-    print(f"fetching {len(cells)} cells x {args.years} yrs from Open-Meteo ...",
-          file=sys.stderr)
+    nbatch = (len(cells) + args.batch - 1) // args.batch
+    print(f"fetching {len(cells)} cells x {args.years} yr in {nbatch} batches "
+          f"of <= {args.batch} ...", file=sys.stderr)
 
     session = requests.Session()
     session.headers["User-Agent"] = "CoolSat/urban-heat (open-meteo archive)"
 
     grid = []
-    for i, (lat, lon) in enumerate(cells, 1):
-        times, values = fetch_cell(lat, lon, start_date, end_date, session)
-        series = monthly_means(times, values, months)
-        grid.append({"lat": round(lat, 3), "lon": round(lon, 3), "v": series})
-        if i % 10 == 0 or i == len(cells):
-            print(f"  {i}/{len(cells)}", file=sys.stderr)
-        time.sleep(args.sleep)
+    for bi in range(nbatch):
+        batch = cells[bi * args.batch:(bi + 1) * args.batch]
+        results = fetch_batch(batch, start_date, end_date, session)
+        for (lat, lon), loc in zip(batch, results):
+            daily = loc.get("daily") if isinstance(loc, dict) else None
+            grid.append({"lat": round(lat, 3), "lon": round(lon, 3),
+                         "v": monthly_means(daily, months)})
+        print(f"  batch {bi + 1}/{nbatch}  ({len(grid)}/{len(cells)} cells)",
+              file=sys.stderr)
+        if bi < nbatch - 1:
+            time.sleep(args.sleep)
+
+    if len(grid) != len(cells):
+        print(f"WARNING: got {len(grid)} cells, expected {len(cells)}",
+              file=sys.stderr)
 
     payload = {
         "meta": {

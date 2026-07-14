@@ -18,7 +18,7 @@ on:
     inputs:
       step:
         description: "Grid resolution in degrees (smaller = finer & slower)"
-        default: "1.0"
+        default: "1.5"
       years:
         description: "Number of years back to fetch"
         default: "10"
@@ -33,7 +33,7 @@ permissions:
 
 concurrency:
   group: fetch-openmeteo-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   fetch:
@@ -51,10 +51,9 @@ jobs:
       - name: Fetch from Open-Meteo
         run: |
           python data/fetch_openmeteo.py \
-            --step "${{ github.event.inputs.step || '1.0' }}" \
+            --step "${{ github.event.inputs.step || '1.5' }}" \
             --years "${{ github.event.inputs.years || '10' }}" \
-            --end-year "${{ github.event.inputs.end_year || '2025' }}" \
-            --sleep 0.3
+            --end-year "${{ github.event.inputs.end_year || '2025' }}"
 
       - name: Commit static dataset if changed
         run: |
