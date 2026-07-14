@@ -7,6 +7,13 @@ name: Fetch Open-Meteo night-time data
 # real dataset gets refreshed.
 
 on:
+  push:
+    branches: [claude/urban-heat-mitigation-aiml-xtn3f3]
+    paths:
+      # Refresh the static dataset whenever the fetch logic or grid changes.
+      - ".github/workflows/fetch-openmeteo.yml"
+      - "data/fetch_openmeteo.py"
+      - "data/us_region.py"
   workflow_dispatch:
     inputs:
       step:
