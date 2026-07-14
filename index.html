@@ -217,6 +217,7 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
 
   const SCALE = data.meta.value_scale || 0.1;
   const months = data.months;
+  const NMONTHS = months.length;
   const cells = data.grid;
   const step = data.meta.grid_step_deg || 0.8;
 
@@ -292,8 +293,7 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
 
   function layout() {
     const cssW = holder.clientWidth;
-    const aspect = (projW + PAD * 2 / 1) / (projH); // keep US proportions
-    const cssH = Math.round(cssW * (projH) / (projW));
+    const cssH = Math.round(cssW * (projH) / (projW)); // keep US proportions
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = cssW; H = cssH;
     canvas.style.height = cssH + "px";
@@ -306,11 +306,6 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
   }
 
   let current = +$("slider").value;
-
-  function surface() {
-    return getComputedStyle(document.documentElement)
-      .getPropertyValue("--panel-2").trim() || "#eef1f0";
-  }
 
   function draw() {
     const t = current;
@@ -383,18 +378,21 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
     $("t-cold").textContent = cold.toFixed(1);
     $("t-cold-cap").textContent = label(coldC.lat, coldC.lon);
 
-    // decadal anomaly: national mean this calendar month vs first year same month
-    const monthOfYear = t % 12;
+    // decadal anomaly: national mean this calendar month vs the first year in the
+    // record with the same calendar month (robust to any start month).
+    const mmKey = months[t].slice(5);
+    let baseIdx = t;
+    for (let i = 0; i < NMONTHS; i++) {
+      if (months[i].slice(5) === mmKey) { baseIdx = i; break; }
+    }
     let s0 = 0, n0 = 0;
     for (const c of cells) {
-      const raw = c.v[monthOfYear]; if (raw == null) continue;
+      const raw = c.v[baseIdx]; if (raw == null) continue;
       s0 += raw * SCALE; n0++;
     }
-    const base = s0 / n0;
-    const d = mean - base;
-    const anomEl = $("t-anom");
-    anomEl.textContent = (d >= 0 ? "+" : "") + d.toFixed(2);
-    $("t-anom-cap").textContent = "vs " + months[monthOfYear].slice(0, 4) + " same month";
+    const d = mean - (s0 / n0);
+    $("t-anom").textContent = (d >= 0 ? "+" : "") + d.toFixed(2);
+    $("t-anom-cap").textContent = "vs " + months[baseIdx].slice(0, 4) + " same month";
   }
 
   // ---- tooltip ----
@@ -421,6 +419,7 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
 
   // ---- transport ----
   const slider = $("slider"), playBtn = $("play"), speedSel = $("speed");
+  slider.max = NMONTHS - 1;                       // size the timeline to the data
   let timer = null;
   function setMonth(t) { current = t; slider.value = t; draw(); }
   slider.addEventListener("input", () => setMonth(+slider.value));
@@ -430,8 +429,8 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     playBtn.textContent = "❚❚ Pause";
     const tick = () => {
-      let t = current + 1; if (t > 119) t = 0; setMonth(t);
-      if (t === 119 && reduce) stop();
+      let t = current + 1; if (t >= NMONTHS) t = 0; setMonth(t);
+      if (t === NMONTHS - 1 && reduce) stop();
     };
     timer = setInterval(tick, +speedSel.value);
   }
@@ -452,6 +451,6 @@ window.__HEAT_SRC__ = "/viz/data/us_nighttime_monthly.json";
   $("foot").innerHTML = `${src} Night-time temperature = monthly mean of daily-minimum
     2&nbsp;m air temperature. Diverging scale centred on a mild (~12&nbsp;°C) night.`;
 
-  layout(); setMonth(6); // start on July 2016 (peak summer)
+  layout(); setMonth(Math.min(6, NMONTHS - 1)); // start on July of the first year
 })();
 </script>
