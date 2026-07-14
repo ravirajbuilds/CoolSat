@@ -1,0 +1,69 @@
+name: Fetch Open-Meteo night-time data
+
+# Pulls REAL average monthly night-time temperature (ERA5 daily-minimum 2 m air
+# temperature) for a CONUS grid from the Open-Meteo archive and commits the static
+# JSON the viewer serves. Runs on GitHub-hosted runners, which have open internet —
+# the CoolSat build container's egress policy blocks Open-Meteo, so this is how the
+# real dataset gets refreshed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "Grid resolution in degrees (smaller = finer & slower)"
+        default: "1.0"
+      years:
+        description: "Number of years back to fetch"
+        default: "10"
+      end_year:
+        description: "Last full calendar year to include"
+        default: "2025"
+  schedule:
+    - cron: "0 6 1 * *"   # monthly, 06:00 UTC on the 1st (keeps the record fresh)
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-openmeteo-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r data/requirements.txt
+
+      - name: Fetch from Open-Meteo
+        run: |
+          python data/fetch_openmeteo.py \
+            --step "${{ github.event.inputs.step || '1.0' }}" \
+            --years "${{ github.event.inputs.years || '10' }}" \
+            --end-year "${{ github.event.inputs.end_year || '2025' }}" \
+            --sleep 0.3
+
+      - name: Commit static dataset if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add viz/data/us_nighttime_monthly.json
+          if git diff --cached --quiet; then
+            echo "No change in dataset."
+          else
+            src=$(python -c "import json;print(json.load(open('viz/data/us_nighttime_monthly.json'))['meta']['source'])")
+            git commit -m "data: refresh night-time temps from Open-Meteo ($src)"
+            git push
+          fi
+
+      - name: Upload dataset as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: us_nighttime_monthly
+          path: viz/data/us_nighttime_monthly.json
